@@ -39,7 +39,7 @@ func TestConnectStoresTokensAndFillsCredentials(t *testing.T) {
 }
 
 func TestConnectTwoFactorChallenge(t *testing.T) {
-	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"resultType":0,"data":{"response":"BLOB"}}`))
 	}, bk.WithCredentials("c", "s"))
 
@@ -56,7 +56,7 @@ func TestConnectTwoFactorChallenge(t *testing.T) {
 
 func TestDisconnectClearsStoreOnError(t *testing.T) {
 	store := bk.NewInMemoryTokenStore("a", "r")
-	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(500)
 		_, _ = w.Write([]byte(`{"resultType":1,"errorMessage":"fail"}`))
 	}, bk.WithTokenStore(store))

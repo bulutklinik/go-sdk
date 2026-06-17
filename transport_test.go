@@ -67,7 +67,7 @@ func TestErrorMapping(t *testing.T) {
 	}
 	for _, c := range cases {
 		c := c
-		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(c.status)
 			_, _ = w.Write([]byte(c.body))
 		}, bk.WithTokenStore(bk.NewInMemoryTokenStore("a", "")))
@@ -83,7 +83,7 @@ func TestErrorMapping(t *testing.T) {
 }
 
 func TestRateLimitRetryAfter(t *testing.T) {
-	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Retry-After", "30")
 		w.WriteHeader(429)
 		_, _ = w.Write([]byte(`{"resultType":1}`))
@@ -134,7 +134,7 @@ func TestRefreshAndRetry(t *testing.T) {
 
 func TestLogoutClearsStore(t *testing.T) {
 	store := bk.NewInMemoryTokenStore("a", "r")
-	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"resultType":2,"errorMessage":"logged out"}`))
 	}, bk.WithTokenStore(store))
 
@@ -148,7 +148,7 @@ func TestLogoutClearsStore(t *testing.T) {
 }
 
 func TestTransportError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	srv.Close() // closed: requests fail at the transport layer
 	client := bk.NewClient(bk.WithBaseURL(srv.URL), bk.WithTokenStore(bk.NewInMemoryTokenStore("a", "")))
 
