@@ -20,7 +20,7 @@ func (s *SlotsService) Schedule(ctx context.Context, in ScheduleInput) (json.Raw
 	if page == nil {
 		page = 1
 	}
-	return s.t.do(ctx, request{http.MethodPost, "/patients/doctorScheduler", authBearer, map[string]any{
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/patients/doctorScheduler", auth: authBearer, body: map[string]any{
 		"doctorId":     in.DoctorID,
 		"scheduleDate": strOrNil(in.ScheduleDate),
 		"scheduleStep": step,

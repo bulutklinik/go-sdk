@@ -1,6 +1,8 @@
 package bulutklinik
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -125,3 +127,55 @@ func NewClient(opts ...Option) *Client {
 
 // TokenStore returns the active token store.
 func (c *Client) TokenStore() TokenStore { return c.transport.tokenStore }
+
+// RequestOptions configures a [Client.Do] call. The zero value (or a nil
+// *RequestOptions) means a bearer-authenticated request with no body and the
+// client's default lang.
+type RequestOptions struct {
+	// Auth selects the authentication mode: "public", "bearer" or "partner".
+	// Empty defaults to "bearer".
+	Auth string
+	// Body is an optional JSON payload (any value that encodes with
+	// encoding/json). It is ignored on GET requests.
+	Body any
+	// Lang optionally overrides the client's default lang header for this
+	// request. Empty uses the client default.
+	Lang string
+}
+
+// Do is an escape hatch for calling any Bulutklinik API endpoint that does not
+// yet have a typed resource method. The request goes through the same transport
+// as the typed methods, so default headers, the chosen auth mode (bearer by
+// default), silent token refresh + retry, response-envelope unwrapping and the
+// typed error hierarchy all apply.
+//
+// method is one of GET, POST, PUT, DELETE; path is relative to the configured
+// base URL with a leading slash (for example "/patients/allBranches"). Pass nil
+// opts for a bearer GET/DELETE with no body. It returns the unwrapped "data"
+// payload as a json.RawMessage (unmarshal it into your own type) plus an error,
+// exactly like the typed resource methods.
+//
+// Prefer a typed resource method when one exists; reach for Do only for the
+// endpoints the SDK does not cover yet.
+func (c *Client) Do(ctx context.Context, method, path string, opts *RequestOptions) (json.RawMessage, error) {
+	r := request{method: method, path: path, auth: authBearer}
+	if opts != nil {
+		r.auth = authModeFromString(opts.Auth)
+		r.body = opts.Body
+		r.lang = opts.Lang
+	}
+	return c.transport.do(ctx, r)
+}
+
+// authModeFromString maps the public string auth labels to the internal
+// authMode. Unknown or empty values default to bearer.
+func authModeFromString(s string) authMode {
+	switch strings.ToLower(s) {
+	case "public":
+		return authPublic
+	case "partner":
+		return authPartner
+	default:
+		return authBearer
+	}
+}

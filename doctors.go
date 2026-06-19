@@ -12,17 +12,17 @@ type DoctorsService struct{ t *transport }
 
 // Branches returns the branch list.
 func (s *DoctorsService) Branches(ctx context.Context) (json.RawMessage, error) {
-	return s.t.do(ctx, request{http.MethodGet, "/patients/allBranches", authBearer, nil})
+	return s.t.do(ctx, request{method: http.MethodGet, path: "/patients/allBranches", auth: authBearer})
 }
 
 // Locations returns the city list.
 func (s *DoctorsService) Locations(ctx context.Context) (json.RawMessage, error) {
-	return s.t.do(ctx, request{http.MethodGet, "/patients/allLocations", authBearer, nil})
+	return s.t.do(ctx, request{method: http.MethodGet, path: "/patients/allLocations", auth: authBearer})
 }
 
 // QuickSearch performs autocomplete search. listType and location may be empty.
 func (s *DoctorsService) QuickSearch(ctx context.Context, searchText, listType, location string) (json.RawMessage, error) {
-	return s.t.do(ctx, request{http.MethodPost, "/patients/quickSearch", authBearer, map[string]any{
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/patients/quickSearch", auth: authBearer, body: map[string]any{
 		"searchText": searchText,
 		"listType":   strOrNil(listType),
 		"location":   strOrNil(location),
@@ -51,7 +51,7 @@ func (s *DoctorsService) Search(ctx context.Context, in SearchInput) (json.RawMe
 	if limit == 0 {
 		limit = 20
 	}
-	return s.t.do(ctx, request{http.MethodPost, "/patients/filteredSearch", authBearer, map[string]any{
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/patients/filteredSearch", auth: authBearer, body: map[string]any{
 		"searchParams": searchParams,
 		"orderParams":  orderParams,
 		"otherParams":  otherParams,
@@ -66,5 +66,5 @@ func (s *DoctorsService) Detail(ctx context.Context, id, corporate any) (json.Ra
 	if corporate != nil {
 		path += fmt.Sprintf("/%v", corporate)
 	}
-	return s.t.do(ctx, request{http.MethodGet, path, authBearer, nil})
+	return s.t.do(ctx, request{method: http.MethodGet, path: path, auth: authBearer})
 }

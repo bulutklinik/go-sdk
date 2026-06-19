@@ -16,7 +16,7 @@ func (s *AppointmentsService) ReserveInterview(ctx context.Context, doctorID any
 	if appointmentType == "" {
 		appointmentType = "interview"
 	}
-	return s.t.do(ctx, request{http.MethodPost, "/patients/addInterviewDateReservation", authBearer, map[string]any{
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/patients/addInterviewDateReservation", auth: authBearer, body: map[string]any{
 		"doctorId":        doctorID,
 		"appointmentDate": appointmentDate,
 		"appointmentType": appointmentType,
@@ -25,7 +25,7 @@ func (s *AppointmentsService) ReserveInterview(ctx context.Context, doctorID any
 
 // AddPhysical creates a physical appointment.
 func (s *AppointmentsService) AddPhysical(ctx context.Context, doctorID any, appointmentDate string) (json.RawMessage, error) {
-	return s.t.do(ctx, request{http.MethodPost, "/patients/addNewAppointment", authBearer, map[string]any{
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/patients/addNewAppointment", auth: authBearer, body: map[string]any{
 		"doctorId":        doctorID,
 		"appointmentDate": appointmentDate,
 	}})
@@ -34,5 +34,5 @@ func (s *AppointmentsService) AddPhysical(ctx context.Context, doctorID any, app
 // Cancel cancels an appointment by event id (cln_events.id).
 func (s *AppointmentsService) Cancel(ctx context.Context, eventID any) (json.RawMessage, error) {
 	path := fmt.Sprintf("/patients/deleteUserAppointment/%v", eventID)
-	return s.t.do(ctx, request{http.MethodDelete, path, authBearer, nil})
+	return s.t.do(ctx, request{method: http.MethodDelete, path: path, auth: authBearer})
 }

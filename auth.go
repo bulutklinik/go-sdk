@@ -34,7 +34,7 @@ func (s *AuthService) Connect(ctx context.Context, in ConnectInput) (*LoginResul
 		body["withPhoneNumber"] = in.WithPhoneNumber
 	}
 
-	data, err := s.t.do(ctx, request{http.MethodPost, "/general/connectApi", authPublic, body})
+	data, err := s.t.do(ctx, request{method: http.MethodPost, path: "/general/connectApi", auth: authPublic, body: body})
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func (s *AuthService) Connect(ctx context.Context, in ConnectInput) (*LoginResul
 
 // ConnectWithTwoFactor completes a 2FA login with the SMS code and challenge blob.
 func (s *AuthService) ConnectWithTwoFactor(ctx context.Context, smsVerificationCode, response string) error {
-	data, err := s.t.do(ctx, request{http.MethodPost, "/general/connectApiWithTwoFactor", authPublic, map[string]any{
+	data, err := s.t.do(ctx, request{method: http.MethodPost, path: "/general/connectApiWithTwoFactor", auth: authPublic, body: map[string]any{
 		"smsVerificationCode": smsVerificationCode,
 		"response":            response,
 	}})
@@ -80,7 +80,7 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) error {
 		accept = 1
 	}
 
-	data, err := s.t.do(ctx, request{http.MethodPost, "/patients/addNewPatient", authPublic, map[string]any{
+	data, err := s.t.do(ctx, request{method: http.MethodPost, path: "/patients/addNewPatient", auth: authPublic, body: map[string]any{
 		"name":                in.Name,
 		"surname":             in.Surname,
 		"apiUserName":         in.APIUserName,
@@ -103,7 +103,7 @@ func (s *AuthService) Refresh(ctx context.Context) error { return s.t.refresh(ct
 
 // Disconnect revokes the current tokens server-side and clears the token store.
 func (s *AuthService) Disconnect(ctx context.Context) error {
-	_, err := s.t.do(ctx, request{http.MethodPost, "/general/disconnectApi", authBearer, map[string]any{}})
+	_, err := s.t.do(ctx, request{method: http.MethodPost, path: "/general/disconnectApi", auth: authBearer, body: map[string]any{}})
 	s.t.tokenStore.Clear()
 	return err
 }

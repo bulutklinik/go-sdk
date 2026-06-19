@@ -24,6 +24,9 @@ type request struct {
 	path   string
 	auth   authMode
 	body   any
+	// lang optionally overrides the client's default lang header for this one
+	// request. Empty means "use the transport default".
+	lang string
 }
 
 type envelope struct {
@@ -91,7 +94,11 @@ func (t *transport) dispatch(ctx context.Context, r request) (int, envelope, str
 		return 0, envelope{}, "", &TransportError{Message: fmt.Sprintf("bulutklinik: build request %s %s: %v", r.method, r.path, err), Err: err}
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("lang", t.lang)
+	lang := r.lang
+	if lang == "" {
+		lang = t.lang
+	}
+	req.Header.Set("lang", lang)
 	if hasBody {
 		req.Header.Set("Content-Type", "application/json")
 	}

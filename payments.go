@@ -26,17 +26,17 @@ func (s *PaymentsService) CheckDiscountCode(ctx context.Context, in DiscountInpu
 	if in.ProgramSlug != "" {
 		body["programSlug"] = in.ProgramSlug
 	}
-	return s.t.do(ctx, request{http.MethodPost, "/patients/checkDiscountCode", authBearer, body})
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/patients/checkDiscountCode", auth: authBearer, body: body})
 }
 
 // GetCards returns the saved cards.
 func (s *PaymentsService) GetCards(ctx context.Context) (json.RawMessage, error) {
-	return s.t.do(ctx, request{http.MethodGet, "/payments/getCards", authBearer, nil})
+	return s.t.do(ctx, request{method: http.MethodGet, path: "/payments/getCards", auth: authBearer})
 }
 
 // SaveCard tokenizes a card.
 func (s *PaymentsService) SaveCard(ctx context.Context, card CardInfo) (json.RawMessage, error) {
-	return s.t.do(ctx, request{http.MethodPost, "/payments/saveCard", authBearer, card})
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/payments/saveCard", auth: authBearer, body: card})
 }
 
 // Pay starts an appointment payment. On a 3DS flow the data contains
@@ -64,11 +64,11 @@ func (s *PaymentsService) Pay(ctx context.Context, in PaymentInput) (json.RawMes
 	if in.CaseDetail != "" {
 		body["caseDetail"] = in.CaseDetail
 	}
-	return s.t.do(ctx, request{http.MethodPost, "/payments/interviewPayment", authBearer, body})
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/payments/interviewPayment", auth: authBearer, body: body})
 }
 
 // DeleteCard removes a saved card.
 func (s *PaymentsService) DeleteCard(ctx context.Context, cardID any) (json.RawMessage, error) {
 	path := fmt.Sprintf("/payments/deleteCard/%v", cardID)
-	return s.t.do(ctx, request{http.MethodDelete, path, authBearer, nil})
+	return s.t.do(ctx, request{method: http.MethodDelete, path: path, auth: authBearer})
 }
