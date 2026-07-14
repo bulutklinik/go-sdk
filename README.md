@@ -4,7 +4,8 @@ Official Bulutklinik API SDK for Go. Standard-library only (no dependencies),
 context-aware, concurrency-safe.
 
 Covers the patient flow: **auth, doctor search, slots, appointments, payments,
-and health measures**. See [`DESIGN.md`](./DESIGN.md) for the full wire contract.
+health measures, and AI image analysis**. See [`DESIGN.md`](./DESIGN.md) for the
+full wire contract.
 
 ## Install
 
@@ -76,6 +77,8 @@ Every data method returns `json.RawMessage` — unmarshal it into your own struc
 | `client.Appointments`  | `ReserveInterview`, `AddPhysical`, `Cancel` |
 | `client.Payments`      | `CheckDiscountCode`, `GetCards`, `SaveCard`, `Pay`, `DeleteCard` |
 | `client.Measures`      | `AddList`, `Add`, `Update`, `Delete`, `Last`, `List`, `Graph`, `PartnerHealthInformation` |
+| `client.Skin`          | `Analyze` |
+| `client.Meals`         | `Analyze` |
 
 ## Authentication & tokens
 
@@ -112,6 +115,31 @@ Sentinels: `ErrTransport`, `ErrAPI`, `ErrValidation`, `ErrAuthentication`,
 `Payments.Pay` returns data containing `payment3DUrl` on a 3DS flow — a browser
 URL to open. The bank → server callback completes the capture; the SDK never
 follows the URL.
+
+## AI image analysis
+
+```go
+// "Cildimde Neyim Var" — analyze one or more skin photos (base64).
+// Each image is a loose record; branch_id is optional.
+raw, err := client.Skin.Analyze(ctx, []map[string]any{
+	{"image": base64Jpeg, "branch_id": 42},
+})
+// data.status[i].case_detail can be forwarded verbatim as a payment's CaseDetail.
+
+// Meal photo → calorie/nutrition estimate.
+grams := 300
+raw, err = client.Meals.Analyze(ctx, bk.MealInput{
+	Image:        base64Jpeg,
+	PortionSize:  "medium", // small | medium | large | custom
+	MealType:     "lunch",  // breakfast | lunch | dinner | snack
+	PortionGrams: &grams,   // required when PortionSize is "custom"
+	// Note:      &note,    // optional free text (≤1000 chars)
+})
+```
+
+`PortionGrams` and `Note` are `*int` / `*string` — leave them nil to omit them
+from the request. `Skin.Analyze` returns `{ status: [...] }`; `Meals.Analyze`
+returns `{ status: { comment } }` where `comment` is a JSON-object string.
 
 ## Development
 

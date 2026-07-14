@@ -84,3 +84,15 @@ type PaymentInput struct {
 	DiscountCode    string
 	CaseDetail      string
 }
+
+// MealInput holds parameters for [MealsService.Analyze]. Image and MealType are
+// required. PortionSize is one of "small", "medium", "large" or "custom".
+// PortionGrams and Note are optional pointers so they are omitted from the
+// request body when nil; PortionGrams is required when PortionSize == "custom".
+type MealInput struct {
+	Image        string
+	PortionSize  string
+	MealType     string
+	PortionGrams *int
+	Note         *string
+}
