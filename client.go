@@ -36,6 +36,7 @@ type Client struct {
 	Meals        *MealsService
 	Laboratory   *LaboratoryService
 	Diets        *DietsService
+	Addresses    *AddressesService
 
 	transport *transport
 }
@@ -130,6 +131,7 @@ func NewClient(opts ...Option) *Client {
 	c.Meals = &MealsService{tr}
 	c.Laboratory = &LaboratoryService{tr}
 	c.Diets = &DietsService{tr}
+	c.Addresses = &AddressesService{tr}
 	return c
 }
 

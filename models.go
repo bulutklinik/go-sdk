@@ -53,6 +53,82 @@ type VerifyRegistrationInput struct {
 	UserAgreements []any
 }
 
+// ConfirmRegistrationEmailInput is step 2 of the e-mail-branch registration.
+type ConfirmRegistrationEmailInput struct {
+	VerificationCode string
+	// Response is the blob from VerifyRegistration (when confirmationType was "email").
+	Response       string
+	UserAgreements []any
+}
+
+// VerifyRegistrationSocialInput is step 1 of social sign-up (public; no CAPTCHA/partner token).
+type VerifyRegistrationSocialInput struct {
+	Name        string
+	Surname     string
+	PhoneNumber string
+	Password    string
+	// SocialType is the provider identifier (e.g. "google", "apple").
+	SocialType string
+	// Key is the social provider key/token identifying the user.
+	Key                 string
+	Email               string
+	AcceptUserAgreement int
+	UserAgreements      []any
+}
+
+// RegisterSocialInput is step 2 of social sign-up. It does NOT mint tokens.
+type RegisterSocialInput struct {
+	SMSVerificationCode string
+	// Response is the blob from VerifyRegistrationSocial.
+	Response       string
+	UserAgreements []any
+}
+
+// ForgotPasswordInput is step 1 of password reset.
+type ForgotPasswordInput struct {
+	PhoneNumber string
+	// Birthdate is optional "YYYY-MM-DD"; required by installs that verify identity.
+	Birthdate string
+	// RecaptchaV2 is sent as "g-recaptcha-response-v2". Set this or Captcha (outside local env).
+	RecaptchaV2 string
+	Captcha     string
+}
+
+// ResetPasswordInput is step 2 of password reset.
+type ResetPasswordInput struct {
+	SMSConfirmCode string
+	// Response is the blob from ForgotPassword.
+	Response string
+	Password string
+}
+
+// AddressInput creates a patient address (addresses.Add).
+type AddressInput struct {
+	Title       string
+	Description  string
+	CityID      any // from Doctors.Locations (location_id)
+	DistrictID  any // from GET /getConfig (cities[].districts[])
+	Address     string
+	LocationLat string
+	LocationLng string
+	// IsDefault: 1 makes it the default. Nil omits the field (first address is default anyway).
+	IsDefault *int
+}
+
+// AddressUpdateInput updates a patient address by ID (addresses.Update).
+// Zero-valued string fields are omitted; send only what you change (or just ID+IsDefault).
+type AddressUpdateInput struct {
+	ID          any
+	Title       string
+	Description  string
+	CityID      any
+	DistrictID  any
+	Address     string
+	LocationLat string
+	LocationLng string
+	IsDefault   *int
+}
+
 // SearchInput holds filtered doctor search parameters.
 type SearchInput struct {
 	SearchParams map[string]any

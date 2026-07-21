@@ -71,16 +71,17 @@ Every data method returns `json.RawMessage` — unmarshal it into your own struc
 
 | Field                  | Methods |
 |------------------------|---------|
-| `client.Auth`          | `Connect`, `ConnectWithTwoFactor`, `VerifyRegistration`, `Register`, `Refresh`, `Disconnect` |
+| `client.Auth`          | `Connect`, `ConnectWithTwoFactor`, `VerifyRegistration`, `ConfirmRegistrationEmail`, `Register`, `VerifyRegistrationSocial`, `RegisterSocial`, `ForgotPassword`, `ResetPassword`, `Refresh`, `Disconnect` |
 | `client.Doctors`       | `Branches`, `Locations`, `QuickSearch`, `Search`, `Detail` |
 | `client.Slots`         | `Schedule` |
-| `client.Appointments`  | `ReserveInterview`, `AddPhysical`, `Cancel` |
+| `client.Appointments`  | `ReserveInterview`, `AddPhysical`, `Cancel`, `List`, `Reservations` |
 | `client.Payments`      | `CheckDiscountCode`, `GetCards`, `SaveCard`, `Pay`, `DeleteCard` |
 | `client.Measures`      | `AddList`, `Add`, `Update`, `Delete`, `Last`, `List`, `Graph`, `PartnerHealthInformation` |
 | `client.Skin`          | `Analyze` |
 | `client.Meals`         | `Analyze` |
 | `client.Laboratory`    | `Results`, `ResultDetail`, `Catalog`, `CatalogDetail`, `Order` |
 | `client.Diets`         | `List`, `Detail` |
+| `client.Addresses`     | `List`, `Add`, `Update`, `Delete` |
 
 ## Authentication & tokens
 
