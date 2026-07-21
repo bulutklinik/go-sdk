@@ -5,6 +5,17 @@ are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Added
+
+- `client.Auth.VerifyRegistration(ctx, in)` — step 1 of registration
+  (`POST /patients/verifyAddingNewPatient`): sends the verification code and returns
+  the raw data holding the encrypted `response` blob to pass to `Register`. Uses the
+  configured partner token (`auth:apiusers`, not public) and requires a
+  browser-minted CAPTCHA token (`RecaptchaV2` or `Captcha`).
+- Type: `VerifyRegistrationInput`.
+
 ## [0.4.0]
 
 ### Added

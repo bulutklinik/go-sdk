@@ -71,7 +71,7 @@ Every data method returns `json.RawMessage` — unmarshal it into your own struc
 
 | Field                  | Methods |
 |------------------------|---------|
-| `client.Auth`          | `Connect`, `ConnectWithTwoFactor`, `Register`, `Refresh`, `Disconnect` |
+| `client.Auth`          | `Connect`, `ConnectWithTwoFactor`, `VerifyRegistration`, `Register`, `Refresh`, `Disconnect` |
 | `client.Doctors`       | `Branches`, `Locations`, `QuickSearch`, `Search`, `Detail` |
 | `client.Slots`         | `Schedule` |
 | `client.Appointments`  | `ReserveInterview`, `AddPhysical`, `Cancel` |

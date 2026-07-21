@@ -65,6 +65,39 @@ func (s *AuthService) ConnectWithTwoFactor(ctx context.Context, smsVerificationC
 	return s.storeTokens(data)
 }
 
+// VerifyRegistration is step 1 of registration: it sends the SMS/e-mail
+// verification code and returns the raw data containing the encrypted "response"
+// blob. It uses the configured partner token (the endpoint is behind
+// auth:apiusers, not public). A CAPTCHA token (RecaptchaV2 or Captcha), minted by
+// a browser/human, is required. Feed the returned "response" (and the code the
+// user receives) into Register.
+func (s *AuthService) VerifyRegistration(ctx context.Context, in VerifyRegistrationInput) (json.RawMessage, error) {
+	accept := in.AcceptUserAgreement
+	if accept == 0 {
+		accept = 1
+	}
+	body := map[string]any{
+		"name":                in.Name,
+		"surname":             in.Surname,
+		"phoneNumber":         in.PhoneNumber,
+		"phone_code":          in.PhoneCode,
+		"email":               in.Email,
+		"password":            in.Password,
+		"passwordAgain":       in.Password,
+		"acceptUserAgreement": accept,
+	}
+	if in.RecaptchaV2 != "" {
+		body["g-recaptcha-response-v2"] = in.RecaptchaV2
+	}
+	if in.Captcha != "" {
+		body["captcha"] = in.Captcha
+	}
+	if in.UserAgreements != nil {
+		body["userAgreements"] = in.UserAgreements
+	}
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/patients/verifyAddingNewPatient", auth: authPartner, body: body})
+}
+
 // Register creates a new patient (afterRegister auto-login) and stores tokens.
 func (s *AuthService) Register(ctx context.Context, in RegisterInput) error {
 	clientID := in.ClientID

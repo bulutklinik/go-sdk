@@ -33,6 +33,26 @@ type RegisterInput struct {
 	ClientSecret        string
 }
 
+// VerifyRegistrationInput holds the fields for the registration verify step
+// (auth.VerifyRegistration). The endpoint requires a CAPTCHA token (RecaptchaV2 or
+// Captcha) minted by a browser/human, and is authorized with the partner token.
+type VerifyRegistrationInput struct {
+	Name        string
+	Surname     string
+	PhoneNumber string
+	// PhoneCode is the country dial code only, e.g. "+90" (matches ^\+\d{1,3}$).
+	PhoneCode           string
+	Email               string
+	Password            string
+	AcceptUserAgreement int
+	// RecaptchaV2 is sent as "g-recaptcha-response-v2". Provide this or Captcha.
+	RecaptchaV2 string
+	// Captcha is sent as "captcha". Provide this or RecaptchaV2.
+	Captcha string
+	// UserAgreements is passed through verbatim when non-nil.
+	UserAgreements []any
+}
+
 // SearchInput holds filtered doctor search parameters.
 type SearchInput struct {
 	SearchParams map[string]any
