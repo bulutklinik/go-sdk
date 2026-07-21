@@ -4,8 +4,8 @@ Official Bulutklinik API SDK for Go. Standard-library only (no dependencies),
 context-aware, concurrency-safe.
 
 Covers the patient flow: **auth, doctor search, slots, appointments, payments,
-health measures, and AI image analysis**. See [`DESIGN.md`](./DESIGN.md) for the
-full wire contract.
+health measures, AI image analysis, laboratory results, and diet lists**. See
+[`DESIGN.md`](./DESIGN.md) for the full wire contract.
 
 ## Install
 
@@ -79,6 +79,8 @@ Every data method returns `json.RawMessage` — unmarshal it into your own struc
 | `client.Measures`      | `AddList`, `Add`, `Update`, `Delete`, `Last`, `List`, `Graph`, `PartnerHealthInformation` |
 | `client.Skin`          | `Analyze` |
 | `client.Meals`         | `Analyze` |
+| `client.Laboratory`    | `Results`, `ResultDetail`, `Catalog`, `CatalogDetail`, `Order` |
+| `client.Diets`         | `List`, `Detail` |
 
 ## Authentication & tokens
 

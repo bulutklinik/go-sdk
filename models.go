@@ -96,3 +96,12 @@ type MealInput struct {
 	PortionGrams *int
 	Note         *string
 }
+
+// LabOrderInput holds parameters for [LaboratoryService.Order]. All three ids
+// are required and serialize to the request body keys testId/addressId/
+// laboratoryId.
+type LabOrderInput struct {
+	TestID       string
+	AddressID    string
+	LaboratoryID string
+}

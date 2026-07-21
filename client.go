@@ -34,6 +34,8 @@ type Client struct {
 	Measures     *MeasuresService
 	Skin         *SkinService
 	Meals        *MealsService
+	Laboratory   *LaboratoryService
+	Diets        *DietsService
 
 	transport *transport
 }
@@ -126,6 +128,8 @@ func NewClient(opts ...Option) *Client {
 	c.Measures = &MeasuresService{tr}
 	c.Skin = &SkinService{tr}
 	c.Meals = &MealsService{tr}
+	c.Laboratory = &LaboratoryService{tr}
+	c.Diets = &DietsService{tr}
 	return c
 }
 

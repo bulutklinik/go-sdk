@@ -5,6 +5,22 @@ are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Added
+
+- `client.Laboratory` — the patient's laboratory results, the orderable test
+  catalog and test pre-ordering (DESIGN.md §6.9): `Results` (`GET
+  /patients/userLabTestList/{page?}`), `ResultDetail` (`GET
+  /patients/userLabTestDetail/{testId}`, string id), `Catalog` (`GET
+  /patients/allLaboratoryTests`), `CatalogDetail` (`GET
+  /patients/laboratoryTestDetail/{id}`) and `Order` (`POST
+  /patients/addNewLaboratoryTest`).
+- `client.Diets` — the patient's diet lists (DESIGN.md §6.10): `List` (`GET
+  /patients/dietLists/{page?}`) and `Detail` (`GET /patients/diet/{listId}`).
+- Type: `LabOrderInput` (`TestID`, `AddressID`, `LaboratoryID`) for
+  `Laboratory.Order`.
+
 ## [0.3.0]
 
 ### Added
