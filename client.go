@@ -38,6 +38,11 @@ type Client struct {
 	Diets        *DietsService
 	Addresses    *AddressesService
 
+	// Partner is the company-scoped partner surface (/outher). It uses the
+	// configured partner token instead of a patient login; data is limited to
+	// your own company and the patient is named inline on each call.
+	Partner *PartnerService
+
 	transport *transport
 }
 
@@ -132,6 +137,7 @@ func NewClient(opts ...Option) *Client {
 	c.Laboratory = &LaboratoryService{tr}
 	c.Diets = &DietsService{tr}
 	c.Addresses = &AddressesService{tr}
+	c.Partner = newPartnerService(tr)
 	return c
 }
 
