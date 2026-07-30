@@ -6,13 +6,13 @@ dependencies), context-aware, concurrency-safe.
 This is a single-persona SDK: every call runs on the company-scoped `/outher`
 surface with the partner token issued for your integration. You act on the
 patients of **your own company**, and the patient is named inline on each
-request — there is no login and no session. See [`DESIGN.md`](./DESIGN.md) for
+request — there is no patient session. See [`DESIGN.md`](./DESIGN.md) for
 the full wire contract.
 
-> **v1.0.0 is a breaking release.** The patient persona (login, registration,
-> payments, AI analysis, address book) has been removed and the former
-> `client.Partner.*` namespace was lifted to the client root. See
-> [CHANGELOG.md](./CHANGELOG.md) and DESIGN.md §12 for the migration.
+> **v1.1.0 restores `client.Auth`.** v1.0.x wrongly assumed the partner token
+> could only be issued out of band; it is in fact minted by `connectApi` from
+> your portal credentials, and it is refreshable. Existing v1.0.x code that uses
+> `WithPartnerToken` keeps working. See [CHANGELOG.md](./CHANGELOG.md).
 
 ## Install
 
@@ -38,12 +38,20 @@ func main() {
 	client, err := bk.NewClient(
 		bk.WithEnvironment(bk.Production), // Production | Test | Local
 		bk.WithAPIVersion(bk.V3),          // V3 (default) | V4
-		bk.WithPartnerToken(os.Getenv("BK_PARTNER_TOKEN")),
+		bk.WithCredentials(os.Getenv("BK_CLIENT_ID"), os.Getenv("BK_CLIENT_SECRET")),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 	ctx := context.Background()
+
+	// 0) Log in. Tokens are stored and refreshed for you.
+	if _, err := client.Auth.Connect(ctx, bk.ConnectInput{
+		APIUserName:     os.Getenv("BK_SERVICE_IDENTITY"),
+		APIUserPassword: os.Getenv("BK_PASSWORD"),
+	}); err != nil {
+		log.Fatal(err)
+	}
 
 	// 1) Find a doctor you can book
 	raw, err := client.Doctors.Search(ctx,
@@ -90,10 +98,11 @@ unmarshal it into your own type.
 
 ## Services
 
-28 endpoints across six groups.
+31 endpoints across seven groups.
 
 | Group                  | Methods |
 |------------------------|---------|
+| `client.Auth`          | `Connect`, `Refresh`, `Disconnect` |
 | `client.Doctors`       | `Search`, `Branches`, `Detail`, `Locations` |
 | `client.Slots`         | `Schedule` |
 | `client.Appointments`  | `Reserve`, `ReserveWithoutAgreement`, `InstantReserve`, `Create`, `CreateWithoutSlot`, `CancelWithoutSlot`, `List`, `Info`, `CheckDoctor` |
@@ -153,43 +162,65 @@ only it.
 
 ## Authentication
 
-The partner token is **issued out of band** through the Bulutklinik Developer
-Platform. It behaves like an API key: there is no login method, and the SDK
-cannot renew it.
+Your portal application issues a **client ID**, a **client secret** and a
+project-specific **service identity**; the password is the one you set when
+registering on the portal. `Auth.Connect` exchanges them for an access token and
+a refresh token:
 
-The token is read from a `TokenStore` on **every** request, so a long-running
-process can pick up a newly issued one without being rebuilt:
+```go
+client, err := bk.NewClient(bk.WithCredentials(clientID, clientSecret))
+
+result, err := client.Auth.Connect(ctx, bk.ConnectInput{
+	APIUserName:     "svc@your-app.bulutklinik",
+	APIUserPassword: "your-portal-password",
+	// LoginMode defaults to "email".
+})
+```
+
+The granted scope comes from the credentials, not the request — a partner
+application is provisioned with `apiouther`, which is what makes `/outher`
+reachable. Already holding a token? Use `WithPartnerToken` and skip the login.
+
+### Refresh
+
+Access tokens last ~30 days, refresh tokens ~130. You do not normally call
+`Refresh` yourself: on a `401` / `resultType 4` the SDK refreshes once and
+retries the original request, and concurrent calls share one in-flight refresh.
+
+```go
+err := client.Auth.Refresh(ctx)     // only useful to refresh ahead of time
+err = client.Auth.Disconnect(ctx)   // revokes both tokens and clears the store
+```
+
+If the refresh fails — or there is no refresh token because you supplied a bare
+partner token — the call returns an `ErrAuthentication` failure and you should
+`Auth.Connect` again.
+
+### Token storage
+
+Tokens are read from a `TokenStore` on **every** request, so a long-running
+process can rotate them without being rebuilt. Implement `RefreshTokenStore` to
+persist both:
 
 ```go
 type VaultStore struct{ /* … */ }
 
-func (s *VaultStore) Token() string        { /* … */ }
-func (s *VaultStore) SetToken(t string)    { /* … */ }
-func (s *VaultStore) Clear()               { /* … */ }
+func (s *VaultStore) Token() string              { /* … */ }
+func (s *VaultStore) SetToken(t string)          { /* … */ }
+func (s *VaultStore) RefreshToken() string       { /* … */ }
+func (s *VaultStore) SetRefreshToken(t string)   { /* … */ }
+func (s *VaultStore) Clear()                     { /* … */ }
 
-client, err := bk.NewClient(bk.WithTokenStore(&VaultStore{}))
-
-// …or rotate the default in-memory store in place:
-client.TokenStore().SetToken(newlyIssuedToken)
+client, err := bk.NewClient(bk.WithTokenStore(&VaultStore{}), bk.WithCredentials(id, secret))
 ```
 
-Pass `WithPartnerToken` **or** `WithTokenStore`, not both — `NewClient` returns
-`ErrCredentialConflict` rather than guessing which one you meant.
+The two refresh methods are **optional**. A plain `TokenStore` — the v1.0.x
+shape, access token only — still works; the SDK then keeps the refresh token in
+memory, so a process restart needs `Auth.Connect` rather than a refresh.
 
-### When the token expires
-
-Tokens last about 30 days. An expired one comes back as `401` / `resultType 4`;
-the SDK returns an `ErrAuthentication` failure and does **not** retry — there is
-nothing to refresh. Recovery is operational: obtain a newly issued token and
-write it into the store.
-
-> This is the one behaviour that changed meaning in v1.0.0. On the patient SDK
-> `resultType 4` meant "the SDK will fix this silently". Here it means the opposite.
-
-An `ErrAuthorization` (403) means the credential itself is wrong — either the
-token lacks the `apiouther` scope, or it resolves to a user with no company. The
-company boundary comes from the token, never from request input, so retrying with
-different body parameters will not help.
+An `ErrAuthorization` (403) means the credential itself is wrong: either the
+granted scope does not include `apiouther`, or the account has no company. The
+company boundary comes from the token, never from request input.
 
 ## Health measures
 

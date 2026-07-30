@@ -47,8 +47,10 @@ var ErrCredentialConflict = errors.New("bulutklinik: pass either WithPartnerToke
 //
 // Every call runs on the company-scoped /outher surface with the partner token
 // issued for your integration: you act on the patients of your own company, and
-// the patient is named inline on each request — there is no login and no session.
+// the patient is named inline on each request — there is no patient session.
 type Client struct {
+	// Auth obtains, refreshes and revokes the access token.
+	Auth *AuthService
 	// Doctors covers discovery: search, branches, detail, city list.
 	Doctors *DoctorsService
 	// Slots covers doctor availability (materialized slots).
@@ -70,6 +72,8 @@ type options struct {
 	apiVersion   APIVersion
 	baseURL      string
 	lang         string
+	clientID     string
+	clientSecret string
 	partnerToken string
 	tokenStore   TokenStore
 	httpClient   *http.Client
@@ -92,7 +96,13 @@ func WithBaseURL(u string) Option { return func(o *options) { o.baseURL = u } }
 // WithLang sets the default lang header (default "tr").
 func WithLang(lang string) Option { return func(o *options) { o.lang = lang } }
 
-// WithPartnerToken sets the partner token issued for your integration. It seeds
+// WithCredentials sets the OAuth client id and secret from your portal
+// application. They are used by [AuthService.Connect] and the silent refresh.
+func WithCredentials(clientID, clientSecret string) Option {
+	return func(o *options) { o.clientID = clientID; o.clientSecret = clientSecret }
+}
+
+// WithPartnerToken sets an already-minted access token. It seeds
 // the default in-memory token store. Mutually exclusive with [WithTokenStore].
 func WithPartnerToken(token string) Option { return func(o *options) { o.partnerToken = token } }
 
@@ -143,13 +153,16 @@ func NewClient(opts ...Option) (*Client, error) {
 	}
 
 	tr := &transport{
-		httpClient: httpClient,
-		baseURL:    base,
-		lang:       o.lang,
-		tokenStore: store,
+		httpClient:   httpClient,
+		baseURL:      base,
+		lang:         o.lang,
+		clientID:     o.clientID,
+		clientSecret: o.clientSecret,
+		tokenStore:   store,
 	}
 
 	c := &Client{transport: tr}
+	c.Auth = &AuthService{tr}
 	c.Doctors = &DoctorsService{tr}
 	c.Slots = &SlotsService{tr}
 	c.Appointments = &AppointmentsService{tr}

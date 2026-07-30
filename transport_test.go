@@ -187,7 +187,7 @@ func TestRateLimitRetryAfter(t *testing.T) {
 	}
 }
 
-func TestExpiredTokenIsNotRetried(t *testing.T) {
+func TestExpiredTokenWithoutARefreshTokenIsNotRetried(t *testing.T) {
 	attempts := 0
 	store := bk.NewInMemoryTokenStore("expired")
 	client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
@@ -200,14 +200,13 @@ func TestExpiredTokenIsNotRetried(t *testing.T) {
 	if !errors.Is(err, bk.ErrAuthentication) {
 		t.Fatalf("want ErrAuthentication, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "cannot refresh it") {
+	if !strings.Contains(err.Error(), "could not be refreshed") {
 		t.Errorf("message should say what to do: %v", err)
 	}
 	if attempts != 1 {
 		t.Errorf("attempts = %d, want 1 (no retry)", attempts)
 	}
-	// An expired token is kept: the caller may want to inspect it while
-	// installing the replacement. Only a revoked one is cleared.
+	// The dead access token is kept; only a revoked session (resultType 2) clears.
 	if store.Token() != "expired" {
 		t.Errorf("token = %q, want it kept", store.Token())
 	}

@@ -1,13 +1,14 @@
 // Command livecheck is a read-only smoke test against the Bulutklinik test
 // environment (apitest). It doubles as an end-to-end usage example.
 //
-// Needs a partner token issued for a test company with the apiouther scope:
+// Needs an approved portal application whose credentials carry apiouther:
 //
-//	BK_PARTNER_TOKEN=... go run ./examples/livecheck
+//	BK_CLIENT_ID=... BK_CLIENT_SECRET=... BK_SERVICE_IDENTITY=... BK_PASSWORD=... \
+//	  go run ./examples/livecheck
 //
-// Unlike the patient surface there is no shared test credential — the token is
-// per-integration. Steps that touch a patient need one that exists inside the
-// token's own company; set BK_PATIENT_TCKN or BK_PATIENT_PHONE to run them.
+// Credentials are per-integration; there is no shared test account. Steps that
+// touch a patient need one that exists inside the credentials' own company; set
+// BK_PATIENT_TCKN or BK_PATIENT_PHONE to run them.
 package main
 
 import (
@@ -40,16 +41,17 @@ func countMap(raw json.RawMessage) int {
 }
 
 func main() {
-	partnerToken := os.Getenv("BK_PARTNER_TOKEN")
-	if partnerToken == "" {
-		fmt.Fprintln(os.Stderr, "BK_PARTNER_TOKEN is required.")
-		os.Exit(2)
+	for _, key := range []string{"BK_CLIENT_ID", "BK_CLIENT_SECRET", "BK_SERVICE_IDENTITY", "BK_PASSWORD"} {
+		if os.Getenv(key) == "" {
+			fmt.Fprintf(os.Stderr, "%s is required.\n", key)
+			os.Exit(2)
+		}
 	}
 
 	client, err := bk.NewClient(
 		bk.WithEnvironment(bk.Test),
 		bk.WithAPIVersion(bk.APIVersion(env("BK_API_VERSION", "v3"))),
-		bk.WithPartnerToken(partnerToken),
+		bk.WithCredentials(os.Getenv("BK_CLIENT_ID"), os.Getenv("BK_CLIENT_SECRET")),
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -75,7 +77,15 @@ func main() {
 		return data
 	}
 
-	// Scope-only steps: these prove the token and base URL without any patient.
+	step("auth.connect", func() (json.RawMessage, error) {
+		_, err := client.Auth.Connect(ctx, bk.ConnectInput{
+			APIUserName:     os.Getenv("BK_SERVICE_IDENTITY"),
+			APIUserPassword: os.Getenv("BK_PASSWORD"),
+		})
+		return nil, err
+	})
+
+	// Scope-only steps: these prove the granted scope and base URL, no patient.
 	if b := step("doctors.branches", func() (json.RawMessage, error) { return client.Doctors.Branches(ctx) }); b != nil {
 		fmt.Printf("    branches=%d\n", countArray(b))
 	}
