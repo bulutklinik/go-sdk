@@ -7,64 +7,36 @@ import (
 	"net/http"
 )
 
-// DoctorsService covers branches, locations, search and doctor detail.
+// DoctorsService covers doctor discovery. Results are scoped to the doctors
+// enabled for your integration (the server filters on your partner slug), so a
+// doctor returned here is one you can actually book. [DoctorsService.Locations]
+// is the exception — a global city catalogue, not company-scoped.
 type DoctorsService struct{ t *transport }
 
-// Branches returns the branch list.
-func (s *DoctorsService) Branches(ctx context.Context) (json.RawMessage, error) {
-	return s.t.do(ctx, request{method: http.MethodGet, path: "/patients/allBranches", auth: authBearer})
-}
-
-// Locations returns the city list.
-func (s *DoctorsService) Locations(ctx context.Context) (json.RawMessage, error) {
-	return s.t.do(ctx, request{method: http.MethodGet, path: "/patients/allLocations", auth: authBearer})
-}
-
-// QuickSearch performs autocomplete search. listType and location may be empty.
-func (s *DoctorsService) QuickSearch(ctx context.Context, searchText, listType, location string) (json.RawMessage, error) {
-	return s.t.do(ctx, request{method: http.MethodPost, path: "/patients/quickSearch", auth: authBearer, body: map[string]any{
-		"searchText": searchText,
-		"listType":   strOrNil(listType),
-		"location":   strOrNil(location),
-	}})
-}
-
-// Search performs filtered doctor search.
-func (s *DoctorsService) Search(ctx context.Context, in SearchInput) (json.RawMessage, error) {
-	searchParams := in.SearchParams
-	if searchParams == nil {
-		searchParams = map[string]any{}
-	}
-	orderParams := in.OrderParams
+// Search runs a filtered doctor search. orderParams accepts "name", "order" and
+// "slot".
+func (s *DoctorsService) Search(ctx context.Context, searchParams map[string]any, currentPage int, orderParams []string) (json.RawMessage, error) {
 	if orderParams == nil {
 		orderParams = []string{}
 	}
-	otherParams := in.OtherParams
-	if otherParams == nil {
-		otherParams = []string{}
-	}
-	page := in.CurrentPage
-	if page == 0 {
-		page = 1
-	}
-	limit := in.PerPageLimit
-	if limit == 0 {
-		limit = 20
-	}
-	return s.t.do(ctx, request{method: http.MethodPost, path: "/patients/filteredSearch", auth: authBearer, body: map[string]any{
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/outher/search", auth: authPartner, body: map[string]any{
 		"searchParams": searchParams,
 		"orderParams":  orderParams,
-		"otherParams":  otherParams,
-		"currentPage":  page,
-		"perPageLimit": limit,
+		"currentPage":  currentPage,
 	}})
 }
 
-// Detail returns doctor detail. Pass corporate == nil to omit the segment.
-func (s *DoctorsService) Detail(ctx context.Context, id, corporate any) (json.RawMessage, error) {
-	path := fmt.Sprintf("/patients/doctorDetail/%v", id)
-	if corporate != nil {
-		path += fmt.Sprintf("/%v", corporate)
-	}
-	return s.t.do(ctx, request{method: http.MethodGet, path: path, auth: authBearer})
+// Branches lists the branches available through your integration.
+func (s *DoctorsService) Branches(ctx context.Context) (json.RawMessage, error) {
+	return s.t.do(ctx, request{method: http.MethodGet, path: "/outher/branches", auth: authPartner})
+}
+
+// Detail returns a single doctor. The doctor_id here feeds [SlotsService.Schedule].
+func (s *DoctorsService) Detail(ctx context.Context, doctorID any) (json.RawMessage, error) {
+	return s.t.do(ctx, request{method: http.MethodGet, path: fmt.Sprintf("/outher/doctorInfos/%v", doctorID), auth: authPartner})
+}
+
+// Locations returns the city list. Global catalogue — not scoped to your company.
+func (s *DoctorsService) Locations(ctx context.Context) (json.RawMessage, error) {
+	return s.t.do(ctx, request{method: http.MethodGet, path: "/outher/locations", auth: authPartner})
 }

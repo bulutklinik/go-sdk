@@ -58,6 +58,11 @@ func newAPIError(method, path, message string, status int, resultType *int, erro
 	switch {
 	case resultType != nil && *resultType == 2:
 		kind = ErrAuthentication
+	case resultType != nil && *resultType == 4:
+		// resultType 4 used to trigger a silent refresh. On the partner surface
+		// there is nothing to refresh, so say what the caller actually has to do.
+		kind = ErrAuthentication
+		message += " The partner token is expired or invalid — install a newly issued token; the SDK cannot refresh it."
 	case isValidationErrorType(errorType) || status == 422:
 		kind = ErrValidation
 	case status == 401:

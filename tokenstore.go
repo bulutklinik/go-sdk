@@ -2,50 +2,45 @@ package bulutklinik
 
 import "sync"
 
-// TokenStore is pluggable token persistence. The default is in-memory; provide
-// your own implementation to persist tokens to a file, cache or database. An
-// empty string means "no token".
+// TokenStore is a pluggable source for the partner token.
+//
+// The token is read on every request, so pointing this at a file, cache,
+// database or secret manager lets a long-running process pick up a newly issued
+// token without being rebuilt. An empty string means "no token"; the transport
+// then fails before dispatching rather than sending an anonymous request.
+//
+// Implementations must be safe for concurrent use.
 type TokenStore interface {
-	AccessToken() string
-	RefreshToken() string
-	SetTokens(access, refresh string)
+	Token() string
+	SetToken(token string)
 	Clear()
 }
 
 // InMemoryTokenStore is the default, concurrency-safe in-memory token store.
 type InMemoryTokenStore struct {
-	mu      sync.RWMutex
-	access  string
-	refresh string
+	mu    sync.RWMutex
+	token string
 }
 
-// NewInMemoryTokenStore returns a store optionally seeded with tokens.
-func NewInMemoryTokenStore(access, refresh string) *InMemoryTokenStore {
-	return &InMemoryTokenStore{access: access, refresh: refresh}
+// NewInMemoryTokenStore returns a store optionally seeded with a token.
+func NewInMemoryTokenStore(token string) *InMemoryTokenStore {
+	return &InMemoryTokenStore{token: token}
 }
 
-func (s *InMemoryTokenStore) AccessToken() string {
+func (s *InMemoryTokenStore) Token() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.access
+	return s.token
 }
 
-func (s *InMemoryTokenStore) RefreshToken() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.refresh
-}
-
-func (s *InMemoryTokenStore) SetTokens(access, refresh string) {
+func (s *InMemoryTokenStore) SetToken(token string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.access = access
-	s.refresh = refresh
+	s.token = token
 }
 
 func (s *InMemoryTokenStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.access = ""
-	s.refresh = ""
+	s.token = ""
 }

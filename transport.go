@@ -8,14 +8,12 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"sync"
 )
 
 type authMode int
 
 const (
 	authPublic authMode = iota
-	authBearer
 	authPartner
 )
 
@@ -36,27 +34,20 @@ type envelope struct {
 	Data         json.RawMessage `json:"data"`
 }
 
+// transport builds requests, unwraps the response envelope and maps failures to
+// typed errors.
+//
+// There is no silent refresh: a partner token is issued out of band and cannot
+// be renewed from here, so an expired one (401 / resultType 4) surfaces as an
+// [ErrAuthentication] failure instead of being retried.
 type transport struct {
-	httpClient   *http.Client
-	baseURL      string
-	lang         string
-	clientID     string
-	clientSecret string
-	partnerToken string
-	tokenStore   TokenStore
-	refreshMu    sync.Mutex
+	httpClient *http.Client
+	baseURL    string
+	lang       string
+	tokenStore TokenStore
 }
 
 func (t *transport) do(ctx context.Context, r request) (json.RawMessage, error) {
-	return t.send(ctx, r, false)
-}
-
-func (t *transport) send(ctx context.Context, r request, isRetry bool) (json.RawMessage, error) {
-	staleAccess := ""
-	if r.auth == authBearer {
-		staleAccess = t.tokenStore.AccessToken()
-	}
-
 	status, env, retryAfter, err := t.dispatch(ctx, r)
 	if err != nil {
 		return nil, err
@@ -66,11 +57,8 @@ func (t *transport) send(ctx context.Context, r request, isRetry bool) (json.Raw
 		return env.Data, nil
 	}
 
-	expired := status == http.StatusUnauthorized || (env.ResultType != nil && *env.ResultType == 4)
-	if r.auth == authBearer && expired && !isRetry && t.tryRefresh(ctx, staleAccess) {
-		return t.send(ctx, r, true)
-	}
-
+	// A revoked token is worth forgetting; an expired one is not, since the
+	// caller may want to inspect it while installing a replacement.
 	if env.ResultType != nil && *env.ResultType == 2 {
 		t.tokenStore.Clear()
 	}
@@ -79,6 +67,17 @@ func (t *transport) send(ctx context.Context, r request, isRetry bool) (json.Raw
 }
 
 func (t *transport) dispatch(ctx context.Context, r request) (int, envelope, string, error) {
+	var token string
+	if r.auth == authPartner {
+		token = t.tokenStore.Token()
+		if token == "" {
+			// Dispatching anyway would only come back as an opaque 401.
+			return 0, envelope{}, "", newAPIError(r.method, r.path,
+				"no partner token configured", http.StatusUnauthorized,
+				nil, nil, nil, nil)
+		}
+	}
+
 	var body io.Reader
 	hasBody := r.body != nil && r.method != http.MethodGet
 	if hasBody {
@@ -102,15 +101,8 @@ func (t *transport) dispatch(ctx context.Context, r request) (int, envelope, str
 	if hasBody {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	switch r.auth {
-	case authBearer:
-		if tok := t.tokenStore.AccessToken(); tok != "" {
-			req.Header.Set("Authorization", "Bearer "+tok)
-		}
-	case authPartner:
-		if t.partnerToken != "" {
-			req.Header.Set("Authorization", "Bearer "+t.partnerToken)
-		}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	resp, err := t.httpClient.Do(req)
@@ -125,63 +117,6 @@ func (t *transport) dispatch(ctx context.Context, r request) (int, envelope, str
 		_ = json.Unmarshal(raw, &env)
 	}
 	return resp.StatusCode, env, resp.Header.Get("Retry-After"), nil
-}
-
-// tryRefresh performs a single token refresh. It is concurrency-safe: callers
-// pass the access token that failed; if another goroutine already refreshed it,
-// this returns true without issuing a second refresh.
-func (t *transport) tryRefresh(ctx context.Context, staleAccess string) bool {
-	t.refreshMu.Lock()
-	defer t.refreshMu.Unlock()
-
-	if staleAccess != "" && t.tokenStore.AccessToken() != staleAccess {
-		return true
-	}
-
-	refreshToken := t.tokenStore.RefreshToken()
-	if refreshToken == "" || t.clientID == "" || t.clientSecret == "" {
-		return false
-	}
-
-	status, env, _, err := t.dispatch(ctx, request{
-		method: http.MethodPost,
-		path:   "/general/refreshApi",
-		auth:   authPublic,
-		body: map[string]any{
-			"refreshToken":    refreshToken,
-			"clientId":        t.clientID,
-			"clientSecretKey": t.clientSecret,
-		},
-	})
-	if err != nil {
-		return false
-	}
-	if status < 200 || status >= 300 || env.ResultType == nil || *env.ResultType != 0 {
-		t.tokenStore.Clear()
-		return false
-	}
-
-	var tokens struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-	}
-	if err := json.Unmarshal(env.Data, &tokens); err != nil || tokens.AccessToken == "" {
-		t.tokenStore.Clear()
-		return false
-	}
-	newRefresh := tokens.RefreshToken
-	if newRefresh == "" {
-		newRefresh = refreshToken
-	}
-	t.tokenStore.SetTokens(tokens.AccessToken, newRefresh)
-	return true
-}
-
-func (t *transport) refresh(ctx context.Context) error {
-	if !t.tryRefresh(ctx, "") {
-		return newAPIError(http.MethodPost, "/general/refreshApi", "token refresh failed", http.StatusUnauthorized, nil, nil, nil, nil)
-	}
-	return nil
 }
 
 func (t *transport) toError(r request, status int, env envelope, retryAfter string) *APIError {

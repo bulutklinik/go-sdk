@@ -18,8 +18,7 @@ type recorded struct {
 	body   map[string]any
 }
 
-// partnerClient wires a client that has BOTH a patient access token and a
-// partner token. Partner calls must ignore the patient one.
+// partnerClient records every call a client makes, against the partner token "PT".
 func partnerClient(t *testing.T) (*bk.Client, *[]recorded) {
 	t.Helper()
 	var calls []recorded
@@ -31,18 +30,18 @@ func partnerClient(t *testing.T) (*bk.Client, *[]recorded) {
 		}
 		calls = append(calls, recorded{r.Method, r.URL.Path, r.Header.Get("Authorization"), body})
 		_, _ = w.Write([]byte(`{"resultType":0,"data":null}`))
-	}, bk.WithTokenStore(bk.NewInMemoryTokenStore("PATIENT", "")), bk.WithPartnerToken("PT"))
+	}, partnerToken("PT"))
 	return client, &calls
 }
 
-func TestPartnerAlwaysUsesPartnerToken(t *testing.T) {
+func TestEveryCallUsesThePartnerToken(t *testing.T) {
 	client, calls := partnerClient(t)
 	ctx := context.Background()
 
-	if _, err := client.Partner.Doctors.Branches(ctx); err != nil {
+	if _, err := client.Doctors.Branches(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Partner.Measures.Last(ctx, bk.Patient{IdentityNumber: "12345678901"}); err != nil {
+	if _, err := client.Measures.Last(ctx, bk.Patient{IdentityNumber: "12345678901"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -53,30 +52,15 @@ func TestPartnerAlwaysUsesPartnerToken(t *testing.T) {
 	}
 }
 
-func TestPatientSurfaceKeepsPatientToken(t *testing.T) {
-	client, calls := partnerClient(t)
-
-	if _, err := client.Doctors.Branches(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if (*calls)[0].auth != "Bearer PATIENT" {
-		t.Errorf("auth = %q, want Bearer PATIENT", (*calls)[0].auth)
-	}
-	if (*calls)[0].path != "/patients/allBranches" {
-		t.Errorf("path = %q", (*calls)[0].path)
-	}
-}
-
-func TestPartnerDiscoveryPaths(t *testing.T) {
+func TestDiscoveryPaths(t *testing.T) {
 	client, calls := partnerClient(t)
 	ctx := context.Background()
 
-	_, _ = client.Partner.Doctors.Locations(ctx)
-	_, _ = client.Partner.Doctors.Detail(ctx, 42)
-	_, _ = client.Partner.Laboratory.Catalog(ctx)
-	_, _ = client.Partner.Laboratory.CatalogDetail(ctx, 18246)
-	_, _ = client.Partner.Slots.Schedule(ctx, bk.PartnerScheduleInput{DoctorID: 7, ScheduleDate: "2026-08-01"})
+	_, _ = client.Doctors.Locations(ctx)
+	_, _ = client.Doctors.Detail(ctx, 42)
+	_, _ = client.Laboratory.Catalog(ctx)
+	_, _ = client.Laboratory.CatalogDetail(ctx, 18246)
+	_, _ = client.Slots.Schedule(ctx, bk.ScheduleInput{DoctorID: 7, ScheduleDate: "2026-08-01"})
 
 	want := []string{
 		"/outher/locations",
@@ -92,14 +76,14 @@ func TestPartnerDiscoveryPaths(t *testing.T) {
 	}
 }
 
-func TestPartnerPatientRefStaysOutOfThePath(t *testing.T) {
+func TestPatientRefStaysOutOfThePath(t *testing.T) {
 	client, calls := partnerClient(t)
 	ctx := context.Background()
 	patient := bk.Patient{IdentityNumber: "12345678901"}
 
-	_, _ = client.Partner.Diets.List(ctx, patient, 2)
-	_, _ = client.Partner.Measures.List(ctx, patient, "glucose", 1, nil)
-	_, _ = client.Partner.Laboratory.Results(ctx, patient, nil)
+	_, _ = client.Diets.List(ctx, patient, 2)
+	_, _ = client.Measures.List(ctx, patient, "glucose", 1, nil)
+	_, _ = client.Laboratory.Results(ctx, patient, nil)
 
 	// The identity number must never leak into a URL — it would land in access
 	// logs, proxy logs and error breadcrumbs.
@@ -120,38 +104,38 @@ func TestPartnerPatientRefStaysOutOfThePath(t *testing.T) {
 	}
 }
 
-func TestPartnerLabResultIDRoundTrips(t *testing.T) {
+func TestLabResultIDRoundTrips(t *testing.T) {
 	client, calls := partnerClient(t)
 	ctx := context.Background()
 	patient := bk.Patient{IdentityNumber: "12345678901"}
 
-	_, _ = client.Partner.Laboratory.ResultDetail(ctx, patient, "1234-lab")
+	_, _ = client.Laboratory.ResultDetail(ctx, patient, "1234-lab")
 	if got := (*calls)[0].body["testId"]; got != "1234-lab" {
 		t.Errorf("testId = %v, want 1234-lab", got)
 	}
 
-	_, _ = client.Partner.Laboratory.ResultDetail(ctx, patient, 1234)
+	_, _ = client.Laboratory.ResultDetail(ctx, patient, 1234)
 	if got := (*calls)[1].body["testId"]; got != "1234" {
 		t.Errorf("testId = %v, want \"1234\"", got)
 	}
 }
 
-func TestPartnerMeasureWriteVerbsAndPaths(t *testing.T) {
+func TestMeasureWriteVerbsAndPaths(t *testing.T) {
 	client, calls := partnerClient(t)
 	ctx := context.Background()
 	writePatient := bk.Patient{Name: "Ada", Surname: "Lovelace", PhoneNumber: "+905551112233"}
 	ref := bk.Patient{IdentityNumber: "12345678901"}
 
-	_, _ = client.Partner.Measures.AddList(ctx, writePatient, []map[string]any{
+	_, _ = client.Measures.AddList(ctx, writePatient, []map[string]any{
 		{"type": "pulse", "date_time": "2026-06-17 09:00", "pulse": 72},
 	})
-	_, _ = client.Partner.Measures.Add(ctx, writePatient, "tension", map[string]any{
+	_, _ = client.Measures.Add(ctx, writePatient, "tension", map[string]any{
 		"date_time": "2026-06-17 09:00", "hypertension": 120, "hypotension": 80,
 	})
-	_, _ = client.Partner.Measures.Update(ctx, ref, "tension", 9, map[string]any{
+	_, _ = client.Measures.Update(ctx, ref, "tension", 9, map[string]any{
 		"date_time": "2026-06-17 10:00", "hypertension": 125, "hypotension": 85,
 	})
-	_, _ = client.Partner.Measures.Delete(ctx, ref, "tension", 9)
+	_, _ = client.Measures.Delete(ctx, ref, "tension", 9)
 
 	want := []struct{ method, path string }{
 		{http.MethodPost, "/outher/measures"},
@@ -174,15 +158,15 @@ func TestPartnerMeasureWriteVerbsAndPaths(t *testing.T) {
 	}
 }
 
-func TestPartnerAppointmentLifecycle(t *testing.T) {
+func TestAppointmentLifecycle(t *testing.T) {
 	client, calls := partnerClient(t)
 	ctx := context.Background()
 	user := bk.Patient{Name: "Ada", Surname: "Lovelace", PhoneNumber: "+905551112233"}
 
-	_, _ = client.Partner.Appointments.Reserve(ctx, 1, 2, user)
-	_, _ = client.Partner.Appointments.Create(ctx, "h", 5)
-	_, _ = client.Partner.Appointments.List(ctx, "+905551112233", nil, "")
-	_, _ = client.Partner.Appointments.CancelWithoutSlot(ctx, bk.AppointmentLookup{Hash: "h", OutherProcessID: 5})
+	_, _ = client.Appointments.Reserve(ctx, 1, 2, user)
+	_, _ = client.Appointments.Create(ctx, "h", 5)
+	_, _ = client.Appointments.List(ctx, "+905551112233", nil, "")
+	_, _ = client.Appointments.CancelWithoutSlot(ctx, bk.AppointmentLookup{Hash: "h", OutherProcessID: 5})
 
 	want := []struct{ method, path string }{
 		{http.MethodPost, "/outher/reservation"},
@@ -197,5 +181,74 @@ func TestPartnerAppointmentLifecycle(t *testing.T) {
 	}
 	if got := (*calls)[0].body["slotId"]; got != float64(1) {
 		t.Errorf("slotId = %v", got)
+	}
+}
+
+func TestRemainingAppointmentEndpoints(t *testing.T) {
+	client, calls := partnerClient(t)
+	ctx := context.Background()
+	user := bk.Patient{Name: "Ada", Surname: "Lovelace", PhoneNumber: "+905551112233"}
+
+	_, _ = client.Appointments.CheckDoctor(ctx, 2, 0)
+	_, _ = client.Appointments.ReserveWithoutAgreement(ctx, 1, 2, user)
+	_, _ = client.Appointments.InstantReserve(ctx, user)
+	_, _ = client.Appointments.CreateWithoutSlot(ctx, bk.AppointmentWithoutSlotInput{
+		DoctorID: 2, StartDate: "2026-08-01 09:00", FinishDate: "2026-08-01 09:30", User: user,
+	})
+	_, _ = client.Appointments.Info(ctx, bk.AppointmentLookup{Hash: "h", OutherProcessID: 5})
+
+	want := []string{
+		"/outher/checkDoctor",
+		"/outher/reservationWithoutAgreement",
+		"/outher/instantReservation",
+		"/outher/appointmentWithoutSlot",
+		"/outher/appointmentInfo",
+	}
+	for i, w := range want {
+		if (*calls)[i].path != w {
+			t.Errorf("call %d path = %q, want %q", i, (*calls)[i].path, w)
+		}
+	}
+}
+
+func TestMeasuresGraphPathAndLegacyTeusanShape(t *testing.T) {
+	client, calls := partnerClient(t)
+	ctx := context.Background()
+
+	_, _ = client.Measures.Graph(ctx, bk.Patient{PhoneNumber: "+905551112233"}, "weight", 3, nil, nil)
+	if (*calls)[0].path != "/outher/measuresGraph/weight/3" {
+		t.Errorf("graph path = %q", (*calls)[0].path)
+	}
+
+	_, _ = client.Measures.HealthInformation(ctx, "12345678901", "+905551112233",
+		[]map[string]any{{"type": "pulse", "date_time": "2026-06-17 09:00", "pulse": 72}})
+	if (*calls)[1].path != "/outher/healthInformation" {
+		t.Errorf("healthInformation path = %q", (*calls)[1].path)
+	}
+	// No `patient` wrapper here — this endpoint predates that contract.
+	if _, ok := (*calls)[1].body["patient"]; ok {
+		t.Errorf("legacy endpoint must stay flat: %v", (*calls)[1].body)
+	}
+	if got := (*calls)[1].body["identity"]; got != "12345678901" {
+		t.Errorf("identity = %v", got)
+	}
+}
+
+func TestDietsAndLabDetailPaths(t *testing.T) {
+	client, calls := partnerClient(t)
+	ctx := context.Background()
+	ref := bk.Patient{IdentityNumber: "12345678901"}
+
+	_, _ = client.Diets.Detail(ctx, ref, 77)
+	_, _ = client.Laboratory.CatalogDetail(ctx, 18246)
+
+	if (*calls)[0].path != "/outher/diet" {
+		t.Errorf("diet path = %q", (*calls)[0].path)
+	}
+	if got := (*calls)[0].body["listId"]; got != float64(77) {
+		t.Errorf("listId = %v", got)
+	}
+	if (*calls)[1].path != "/outher/laboratoryCatalog/18246" {
+		t.Errorf("catalogDetail path = %q", (*calls)[1].path)
 	}
 }

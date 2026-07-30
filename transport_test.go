@@ -7,20 +7,29 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	bk "github.com/bulutklinik/go-sdk"
 )
 
+// newTestClient wires a client at a local test server. Unless an option
+// overrides it, the credential is the partner token "PT".
 func newTestClient(t *testing.T, handler http.HandlerFunc, opts ...bk.Option) (*bk.Client, *httptest.Server) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	all := append([]bk.Option{bk.WithBaseURL(srv.URL)}, opts...)
-	return bk.NewClient(all...), srv
+	client, err := bk.NewClient(all...)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	return client, srv
 }
 
-func TestQuickSearchSuccess(t *testing.T) {
+func partnerToken(token string) bk.Option { return bk.WithTokenStore(bk.NewInMemoryTokenStore(token)) }
+
+func TestSearchSuccess(t *testing.T) {
 	var gotAuth, gotLang, gotPath, gotBody string
 	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
@@ -28,20 +37,21 @@ func TestQuickSearchSuccess(t *testing.T) {
 		gotPath = r.URL.Path
 		b, _ := io.ReadAll(r.Body)
 		gotBody = string(b)
-		_, _ = w.Write([]byte(`{"resultType":0,"data":{"searchedDoctors":[]}}`))
-	}, bk.WithTokenStore(bk.NewInMemoryTokenStore("abc", "")))
+		_, _ = w.Write([]byte(`{"resultType":0,"data":{"foundDoctors":[]}}`))
+	}, partnerToken("PT"))
 
-	data, err := client.Doctors.QuickSearch(context.Background(), "kardiyo", "", "")
+	data, err := client.Doctors.Search(context.Background(),
+		map[string]any{"withFreeText": "kardiyoloji"}, 1, []string{"slot"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if string(data) != `{"searchedDoctors":[]}` {
+	if string(data) != `{"foundDoctors":[]}` {
 		t.Errorf("data = %s", data)
 	}
-	if gotPath != "/patients/quickSearch" {
+	if gotPath != "/outher/search" {
 		t.Errorf("path = %s", gotPath)
 	}
-	if gotAuth != "Bearer abc" {
+	if gotAuth != "Bearer PT" {
 		t.Errorf("auth = %q", gotAuth)
 	}
 	if gotLang != "tr" {
@@ -49,8 +59,86 @@ func TestQuickSearchSuccess(t *testing.T) {
 	}
 	var body map[string]any
 	_ = json.Unmarshal([]byte(gotBody), &body)
-	if body["searchText"] != "kardiyo" || body["listType"] != nil || body["location"] != nil {
+	if body["currentPage"] != float64(1) {
 		t.Errorf("body = %s", gotBody)
+	}
+}
+
+func TestAPIVersionSelectsTheBaseURL(t *testing.T) {
+	for _, c := range []struct {
+		version bk.APIVersion
+		want    string
+	}{
+		{bk.V3, "/api/v3/outher/branches"},
+		{bk.V4, "/api/v4/outher/branches"},
+	} {
+		client, err := bk.NewClient(
+			bk.WithEnvironment(bk.Test),
+			bk.WithAPIVersion(c.version),
+			bk.WithPartnerToken("PT"),
+			// A transport that fails immediately, so nothing leaves the machine
+			// while still reporting the URL that was built.
+			bk.WithHTTPClient(&http.Client{Transport: failingTransport{}}),
+		)
+		if err != nil {
+			t.Fatalf("NewClient: %v", err)
+		}
+
+		_, err = client.Doctors.Branches(context.Background())
+		var tErr *bk.TransportError
+		if !errors.As(err, &tErr) {
+			t.Fatalf("%s: want *TransportError, got %v", c.version, err)
+		}
+		if !strings.Contains(tErr.Err.Error(), c.want) {
+			t.Errorf("%s: built URL %v, want it to contain %q", c.version, tErr.Err, c.want)
+		}
+	}
+}
+
+// failingTransport refuses every request, echoing the URL in the error.
+type failingTransport struct{}
+
+func (failingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	return nil, errors.New("refused: " + r.URL.String())
+}
+
+func TestPartnerTokenAndTokenStoreConflict(t *testing.T) {
+	_, err := bk.NewClient(bk.WithPartnerToken("PT"), bk.WithTokenStore(bk.NewInMemoryTokenStore("OTHER")))
+	if !errors.Is(err, bk.ErrCredentialConflict) {
+		t.Errorf("want ErrCredentialConflict, got %v", err)
+	}
+}
+
+func TestMissingTokenFailsBeforeDispatch(t *testing.T) {
+	dispatched := 0
+	client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		dispatched++
+		_, _ = w.Write([]byte(`{"resultType":0,"data":null}`))
+	}, partnerToken(""))
+
+	_, err := client.Doctors.Branches(context.Background())
+	if !errors.Is(err, bk.ErrAuthentication) {
+		t.Errorf("want ErrAuthentication, got %v", err)
+	}
+	if dispatched != 0 {
+		t.Errorf("dispatched %d requests, want 0", dispatched)
+	}
+}
+
+func TestTokenIsReadFromStoreOnEveryCall(t *testing.T) {
+	var auths []string
+	store := bk.NewInMemoryTokenStore("first")
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		auths = append(auths, r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(`{"resultType":0,"data":null}`))
+	}, bk.WithTokenStore(store))
+
+	_, _ = client.Doctors.Branches(context.Background())
+	store.SetToken("second")
+	_, _ = client.Doctors.Branches(context.Background())
+
+	if auths[0] != "Bearer first" || auths[1] != "Bearer second" {
+		t.Errorf("auths = %v", auths)
 	}
 }
 
@@ -70,7 +158,7 @@ func TestErrorMapping(t *testing.T) {
 		client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(c.status)
 			_, _ = w.Write([]byte(c.body))
-		}, bk.WithTokenStore(bk.NewInMemoryTokenStore("a", "")))
+		}, partnerToken("PT"))
 
 		_, err := client.Doctors.Branches(context.Background())
 		if !errors.Is(err, c.sentinel) {
@@ -87,7 +175,7 @@ func TestRateLimitRetryAfter(t *testing.T) {
 		w.Header().Set("Retry-After", "30")
 		w.WriteHeader(429)
 		_, _ = w.Write([]byte(`{"resultType":1}`))
-	}, bk.WithTokenStore(bk.NewInMemoryTokenStore("a", "")))
+	}, partnerToken("PT"))
 
 	_, err := client.Doctors.Branches(context.Background())
 	var apiErr *bk.APIError
@@ -99,50 +187,43 @@ func TestRateLimitRetryAfter(t *testing.T) {
 	}
 }
 
-func TestRefreshAndRetry(t *testing.T) {
-	dataCalls := 0
-	var lastAuth string
-	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/general/refreshApi" {
-			_, _ = w.Write([]byte(`{"resultType":0,"data":{"access_token":"new","refresh_token":"r2"}}`))
-			return
-		}
-		lastAuth = r.Header.Get("Authorization")
-		dataCalls++
-		if dataCalls == 1 {
-			w.WriteHeader(401)
-			_, _ = w.Write([]byte(`{"resultType":4}`))
-			return
-		}
-		_, _ = w.Write([]byte(`{"resultType":0,"data":{"ok":true}}`))
-	}, bk.WithTokenStore(bk.NewInMemoryTokenStore("old", "r")), bk.WithCredentials("c", "s"))
+func TestExpiredTokenIsNotRetried(t *testing.T) {
+	attempts := 0
+	store := bk.NewInMemoryTokenStore("expired")
+	client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		w.WriteHeader(401)
+		_, _ = w.Write([]byte(`{"resultType":4,"errorMessage":"You must log in."}`))
+	}, bk.WithTokenStore(store))
 
-	data, err := client.Measures.Last(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := client.Measures.Last(context.Background(), bk.Patient{IdentityNumber: "12345678901"})
+	if !errors.Is(err, bk.ErrAuthentication) {
+		t.Fatalf("want ErrAuthentication, got %v", err)
 	}
-	if string(data) != `{"ok":true}` {
-		t.Errorf("data = %s", data)
+	if !strings.Contains(err.Error(), "cannot refresh it") {
+		t.Errorf("message should say what to do: %v", err)
 	}
-	if client.TokenStore().AccessToken() != "new" {
-		t.Errorf("token not refreshed: %q", client.TokenStore().AccessToken())
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1 (no retry)", attempts)
 	}
-	if lastAuth != "Bearer new" {
-		t.Errorf("retry auth = %q", lastAuth)
+	// An expired token is kept: the caller may want to inspect it while
+	// installing the replacement. Only a revoked one is cleared.
+	if store.Token() != "expired" {
+		t.Errorf("token = %q, want it kept", store.Token())
 	}
 }
 
 func TestLogoutClearsStore(t *testing.T) {
-	store := bk.NewInMemoryTokenStore("a", "r")
+	store := bk.NewInMemoryTokenStore("revoked")
 	client, _ := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"resultType":2,"errorMessage":"logged out"}`))
 	}, bk.WithTokenStore(store))
 
-	_, err := client.Measures.Last(context.Background())
+	_, err := client.Measures.Last(context.Background(), bk.Patient{IdentityNumber: "12345678901"})
 	if !errors.Is(err, bk.ErrAuthentication) {
 		t.Errorf("want ErrAuthentication, got %v", err)
 	}
-	if store.AccessToken() != "" {
+	if store.Token() != "" {
 		t.Errorf("store not cleared")
 	}
 }
@@ -150,35 +231,13 @@ func TestLogoutClearsStore(t *testing.T) {
 func TestTransportError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	srv.Close() // closed: requests fail at the transport layer
-	client := bk.NewClient(bk.WithBaseURL(srv.URL), bk.WithTokenStore(bk.NewInMemoryTokenStore("a", "")))
+	client, err := bk.NewClient(bk.WithBaseURL(srv.URL), bk.WithPartnerToken("PT"))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
 
-	_, err := client.Doctors.Branches(context.Background())
+	_, err = client.Doctors.Branches(context.Background())
 	if !errors.Is(err, bk.ErrTransport) {
 		t.Errorf("want ErrTransport, got %v", err)
-	}
-}
-
-func TestMeasurePathAndPartner(t *testing.T) {
-	var paths, auths []string
-	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		auths = append(auths, r.Header.Get("Authorization"))
-		_, _ = w.Write([]byte(`{"resultType":0,"data":null}`))
-	}, bk.WithTokenStore(bk.NewInMemoryTokenStore("a", "")), bk.WithPartnerToken("PT"))
-
-	gt := 0
-	if _, err := client.Measures.List(context.Background(), "glucose", 1, &gt); err != nil {
-		t.Fatal(err)
-	}
-	if paths[0] != "/patients/userMeasuresList/glucose/1/0" {
-		t.Errorf("path = %s", paths[0])
-	}
-
-	if _, err := client.Measures.PartnerHealthInformation(context.Background(), "", "5551112233",
-		[]map[string]any{{"type": "pulse", "date_time": "2026-06-17 09:00", "pulse": 72}}); err != nil {
-		t.Fatal(err)
-	}
-	if auths[len(auths)-1] != "Bearer PT" {
-		t.Errorf("partner auth = %q", auths[len(auths)-1])
 	}
 }

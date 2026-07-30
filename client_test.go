@@ -9,16 +9,16 @@ import (
 	bk "github.com/bulutklinik/go-sdk"
 )
 
-func TestDoBearerGET(t *testing.T) {
+func TestDoDefaultsToPartner(t *testing.T) {
 	var gotAuth, gotMethod, gotPath string
 	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		_, _ = w.Write([]byte(`{"resultType":0,"data":{"ok":true}}`))
-	}, bk.WithTokenStore(bk.NewInMemoryTokenStore("abc", "")))
+	}, partnerToken("PT"))
 
-	data, err := client.Do(context.Background(), "GET", "/patients/customEndpoint", nil)
+	data, err := client.Do(context.Background(), "GET", "/outher/customEndpoint", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -28,10 +28,10 @@ func TestDoBearerGET(t *testing.T) {
 	if gotMethod != "GET" {
 		t.Errorf("method = %q", gotMethod)
 	}
-	if gotPath != "/patients/customEndpoint" {
+	if gotPath != "/outher/customEndpoint" {
 		t.Errorf("path = %q", gotPath)
 	}
-	if gotAuth != "Bearer abc" {
+	if gotAuth != "Bearer PT" {
 		t.Errorf("auth = %q", gotAuth)
 	}
 }
@@ -44,7 +44,7 @@ func TestDoPublicPOST(t *testing.T) {
 		b, _ := io.ReadAll(r.Body)
 		gotBody = string(b)
 		_, _ = w.Write([]byte(`{"resultType":0,"data":{"id":7}}`))
-	}, bk.WithTokenStore(bk.NewInMemoryTokenStore("abc", "")))
+	}, partnerToken("PT"))
 
 	data, err := client.Do(context.Background(), "POST", "/general/somePublicEndpoint", &bk.RequestOptions{
 		Auth: "public",

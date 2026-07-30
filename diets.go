@@ -3,26 +3,24 @@ package bulutklinik
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
-// DietsService covers the patient's diet lists (a dietitian's "Diyet Listesi").
+// DietsService reads diet lists recorded for a patient inside your own company.
+// Lists written by other clinics are not visible.
 type DietsService struct{ t *transport }
 
-// List returns the patient's diet lists. Pass page == nil to omit the segment
-// (the server defaults to page 1, fixed page size 10), mirroring the
-// optional-segment idiom of [DoctorsService.Detail].
-func (s *DietsService) List(ctx context.Context, page any) (json.RawMessage, error) {
-	path := "/patients/dietLists"
-	if page != nil {
-		path += fmt.Sprintf("/%v", page)
-	}
-	return s.t.do(ctx, request{method: http.MethodGet, path: path, auth: authBearer})
+// List returns paginated diet lists. Page size is fixed to 20 server-side.
+func (s *DietsService) List(ctx context.Context, patient Patient, page any) (json.RawMessage, error) {
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/outher/dietLists", auth: authPartner, body: map[string]any{
+		"patient": patient, "currentPage": page,
+	}})
 }
 
-// Detail returns one diet list by its list_id (from a [DietsService.List] item).
-func (s *DietsService) Detail(ctx context.Context, listID string) (json.RawMessage, error) {
-	path := fmt.Sprintf("/patients/diet/%s", listID)
-	return s.t.do(ctx, request{method: http.MethodGet, path: path, auth: authBearer})
+// Detail returns the meal breakdown of one diet list. listID comes from List; one
+// that is not this patient's fails with the same generic error as "not found".
+func (s *DietsService) Detail(ctx context.Context, patient Patient, listID any) (json.RawMessage, error) {
+	return s.t.do(ctx, request{method: http.MethodPost, path: "/outher/diet", auth: authPartner, body: map[string]any{
+		"patient": patient, "listId": listID,
+	}})
 }
