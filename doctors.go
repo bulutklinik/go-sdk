@@ -15,6 +15,10 @@ type DoctorsService struct{ t *transport }
 
 // Search runs a filtered doctor search. orderParams accepts "name", "order" and
 // "slot".
+//
+// searchParams must carry at least one key: the server rule is required|array and
+// PHP's required rejects an empty map, so an empty or nil searchParams is a
+// validation error rather than an unfiltered search.
 func (s *DoctorsService) Search(ctx context.Context, searchParams map[string]any, currentPage int, orderParams []string) (json.RawMessage, error) {
 	if orderParams == nil {
 		orderParams = []string{}

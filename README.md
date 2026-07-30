@@ -214,9 +214,12 @@ client.Measures.Graph(ctx, ref, "tension", 2, nil, nil)    // period 2 = weekly
 `Measures.HealthInformation` is the legacy `teusan` bulk endpoint, kept for
 existing integrations: it needs the `teusan` scope instead of `apiouther`, takes
 a flat identity + phone number instead of a patient object, and writes into the
-shared consumer tenant. The API currently matches on phone number only (a
-server-side bug nulls `identity` during validation); pass both for forward
-compatibility. Prefer `AddList` for anything new.
+shared consumer tenant. Its patient matching is an **OR**, and it is loose: the lookup is
+`identity OR phoneNumber` against the *global* user table and takes the first
+row, so a phone number alone can resolve someone whose TCKN differs from the one
+you sent. Send both, but do not assume they are checked as a pair — the
+`apiouther` reads above do the opposite, scoping to your company and failing
+closed on ambiguity. Prefer `AddList` for anything new.
 
 ## Escape hatch
 
