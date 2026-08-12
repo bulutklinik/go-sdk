@@ -26,7 +26,8 @@ type LoginResult struct {
 type ConnectInput struct {
 	// APIUserName is the project-specific service identity, not an e-mail you chose.
 	APIUserName string
-	// APIUserPassword is the password set when registering on the portal.
+	// APIUserPassword is this application's password, issued by the portal.
+	// It is not the developer's portal account password.
 	APIUserPassword string
 	ClientID        string
 	ClientSecret    string
