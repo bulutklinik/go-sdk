@@ -162,9 +162,10 @@ only it.
 
 ## Authentication
 
-Your portal application issues a **client ID**, a **client secret** and a
-project-specific **service identity**; the password is the one you set when
-registering on the portal. `Auth.Connect` exchanges them for an access token and
+Your portal application issues four values: a **client ID**, a **client secret**,
+a project-specific **service identity** and an **application password**. The
+password belongs to this application only — it is not your portal account
+password, and you can regenerate it in the portal if it leaks. `Auth.Connect` exchanges them for an access token and
 a refresh token:
 
 ```go
