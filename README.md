@@ -80,7 +80,7 @@ func main() {
 	held, err := client.Appointments.ReserveWithoutAgreement(ctx, slotID, doctorID, bk.Patient{
 		Name:        "Ada",
 		Surname:     "Lovelace",
-		PhoneNumber: "+905551112233",
+		PhoneNumber: "+90 5551112233",
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -121,7 +121,7 @@ company and never creates anything:
 
 ```go
 client.Measures.Last(ctx, bk.Patient{IdentityNumber: "12345678901"})
-client.Diets.List(ctx, bk.Patient{PhoneNumber: "+905551112233"}, nil)
+client.Diets.List(ctx, bk.Patient{PhoneNumber: "+90 5551112233"}, nil)
 ```
 
 `IdentityNumber` is primary; `PhoneNumber` is a fallback accepted only when it
@@ -134,7 +134,7 @@ created inside your company if absent:
 
 ```go
 client.Measures.AddList(ctx,
-	bk.Patient{Name: "Ada", Surname: "Lovelace", PhoneNumber: "+905551112233"},
+	bk.Patient{Name: "Ada", Surname: "Lovelace", PhoneNumber: "+90 5551112233"},
 	[]map[string]any{{"type": "pulse", "date_time": "2026-06-17 09:31", "pulse": 72}},
 )
 ```
